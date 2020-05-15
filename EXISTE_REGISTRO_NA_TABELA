@@ -1,0 +1,44 @@
+*****************************************************************************************************
+	-- SCRIPT EXISTE REGISTRO NA TABELA                                                      
+*****************************************************************************************************
+/* 
+ESTA FUNCTION TEM O OBJETIVO DE BUSCAR O NOME DAS TABELAS E COLUNAS QUE POSSUEM UM DETERMINADO VALOR, 
+EX: GOSTARIA DE SABER SE EM QUALQUER TABELA DE ALGUM SCHEMA EXISTE O MEU NOME (ANDREI) EU EXECUTARIA ESTA 
+FUNÇÃO QUE IRÁ EXECUTAR UM SELECT COUNT EM TODAS AS COLUNAS DE TODAS AS TABELAS E RETORNAR AS QUAIS EXISTEM.
+MAS ATENÇÃO: AO DEPENDER DA QUANTIDADE DE REGISTROS EM SEU SCHEMA ESSA INSTRUÇÃO PODE SER DEMORADA.
+*/
+
+CREATE OR REPLACE FUNCTION public.existe_registro_tabela(p_valor text, p_table_schema text)
+RETURNS text AS $$ 
+DECLARE
+	v_linha text;
+	v_count text;
+	v_result text;
+BEGIN
+
+	FOR v_linha IN   
+		select 'select count(*)  from '|| table_schema ||'."'||table_name || '" where UPPER(CAST("'|| column_name || '" AS TEXT)) like '''||p_valor||''';'   
+		from information_schema.columns 
+		where upper(table_schema) = p_table_schema
+		order by table_name
+	LOOP
+		EXECUTE v_linha INTO v_count;
+		if v_count <> '0' then
+		v_result := v_linha;
+	end if;
+	END LOOP;
+	RETURN v_result;
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- PARA EXECUÇÃO BASTA PAASSAR COMO PARAMETRO O VALOR A SER PROCURADO E O SCHEMA EM QUE ELE SERÁ PROCURADO
+select public.existe_registro_tabela('%TESTE%', 'PUBLIC');​
+
+-- CASO NÃO ENCONTRE NADA IRÁ RETORNAR:
+NULL
+
+-- CASO ENCONTRE ELE IRÁ RETORNAR A INSTRUÇÃO:
+select count(*)  from  table_schema.table_name where UPPER(CAST(column_name || AS TEXT)) like '%VALOR_PARAMETRO%'; 
+-- APÓS ISSO BASTA VOCÊ EXECUTAR SUAS CONSULTAS COM BASE NOS VALORES table_schema.table_name e a column_name EM QUE FOI ENCONTRADO O VALOR
