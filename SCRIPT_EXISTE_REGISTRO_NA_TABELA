@@ -1,44 +1,67 @@
 *****************************************************************************************************
 	-- SCRIPT EXISTE REGISTRO NA TABELA                                                      
 *****************************************************************************************************
-/* 
-ESTA FUNCTION TEM O OBJETIVO DE BUSCAR O NOME DAS TABELAS E COLUNAS QUE POSSUEM UM DETERMINADO VALOR, 
-EX: GOSTARIA DE SABER SE EM QUALQUER TABELA DE ALGUM SCHEMA EXISTE O MEU NOME (ANDREI) EU EXECUTARIA ESTA 
-FUNÇÃO QUE IRÁ EXECUTAR UM SELECT COUNT EM TODAS AS COLUNAS DE TODAS AS TABELAS E RETORNAR AS QUAIS EXISTEM.
-MAS ATENÇÃO: AO DEPENDER DA QUANTIDADE DE REGISTROS EM SEU SCHEMA ESSA INSTRUÇÃO PODE SER DEMORADA.
-*/
+-- ESTA FUNCTION BUSCA O NOME DAS TABELAS QUE POSSUEM UM DETERMINADO VALOR EM QUALQUER COLUNA DELA
 
-CREATE OR REPLACE FUNCTION public.existe_registro_tabela(p_valor text, p_table_schema text)
+CREATE OR REPLACE FUNCTION public.existe_registro_tabela(p_valor text, p_schema text)
 RETURNS text AS $$ 
 DECLARE
-	v_linha text;
+	v_query text;
 	v_count text;
 	v_result text;
-BEGIN
+	v_table text;
+	v_column text;
+	v_pos_inicial integer;
+	v_pos_final integer;
+	v_tam_string integer;
 
-	FOR v_linha IN   
+BEGIN
+	v_result := '';
+
+	FOR v_query IN   
 		select 'select count(*)  from '|| table_schema ||'."'||table_name || '" where UPPER(CAST("'|| column_name || '" AS TEXT)) like '''||p_valor||''';'   
 		from information_schema.columns 
-		where upper(table_schema) = p_table_schema
+		where upper(table_schema) = upper(p_schema)
 		order by table_name
 	LOOP
-		EXECUTE v_linha INTO v_count;
+	
+		EXECUTE v_query INTO v_count;
+	
 		if v_count <> '0' then
-		v_result := v_linha;
-	end if;
+		
+			v_pos_inicial:= length('select count(*)  from')+1;
+			v_pos_final := position('where' in v_query);
+			v_tam_string :=  v_pos_final - v_pos_inicial;	
+			v_table := SUBSTRING(v_query, v_pos_inicial, v_tam_string); 
+	
+			v_pos_inicial:= position('CAST(' in upper(v_query)) + 5;
+			v_pos_final := position('AS TEXT' in v_query);
+			v_tam_string :=  v_pos_final - v_pos_inicial;	
+			v_column := SUBSTRING(v_query, v_pos_inicial, v_tam_string); 
+		
+			v_result := v_result || ' TABELA:'|| v_table || ' / COLUNA: '|| v_column || ' / QUANTIDADE DE REGISTROS: '||v_count||chr(10);
+		end if;
+	
 	END LOOP;
+	
 	RETURN v_result;
 
 END;
+
 $$ LANGUAGE plpgsql;
 
 
 -- PARA EXECUÇÃO BASTA PAASSAR COMO PARAMETRO O VALOR A SER PROCURADO E O SCHEMA EM QUE ELE SERÁ PROCURADO
 select public.existe_registro_tabela('%TESTE%', 'PUBLIC');​
 
+
 -- CASO NÃO ENCONTRE NADA IRÁ RETORNAR:
 NULL
 
+
 -- CASO ENCONTRE ELE IRÁ RETORNAR A INSTRUÇÃO:
-select count(*)  from  table_schema.table_name where UPPER(CAST(column_name || AS TEXT)) like '%VALOR_PARAMETRO%'; 
--- APÓS ISSO BASTA VOCÊ EXECUTAR SUAS CONSULTAS COM BASE NOS VALORES table_schema.table_name e a column_name EM QUE FOI ENCONTRADO O VALOR
+TABELA: table_schema."table_name"  / COLUNA: "column_01"  / QUANTIDADE DE REGISTROS: n
+TABELA: table_schema."table_name"  / COLUNA: "column_02"  / QUANTIDADE DE REGISTROS: n
+TABELA: table_schema."table_name"  / COLUNA: "column_03"  / QUANTIDADE DE REGISTROS: n
+
+-- E ENTÃO BASTA VOCÊ MONTAR SEU SQL :)
